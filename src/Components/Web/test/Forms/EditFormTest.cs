@@ -589,6 +589,52 @@ public class EditFormTest
         Assert.Empty(disposedIds);
     }
 
+    [Fact]
+    public async Task WhenAllowModelChangeIsTrue_ReplacingModelDoesNotDisposeChildComponents()
+    {
+        var model = new TestModel { StringProperty = "initial" };
+        var rootComponent = new EditFormWithChildHostComponent { Model = model, AllowModelChange = true };
+        var componentId = _testRenderer.AssignRootComponentId(rootComponent);
+        await _testRenderer.RenderRootComponentAsync(componentId);
+
+        var batchesBeforeReplace = _testRenderer.Batches.Count;
+
+        rootComponent.Model = new TestModel { StringProperty = "replaced" };
+        rootComponent.TriggerRender();
+
+        // With AllowModelChange=true, child components should NOT be disposed
+        var disposedIds = _testRenderer.Batches
+            .Skip(batchesBeforeReplace)
+            .SelectMany(b => b.DisposedComponentIDs)
+            .ToList();
+
+        Assert.Empty(disposedIds);
+    }
+
+    [Fact]
+    public async Task WhenAllowModelChangeIsTrue_MultipleModelReplacements_ChildComponentsAreNeverDisposed()
+    {
+        var model = new TestModel { StringProperty = "first" };
+        var rootComponent = new EditFormWithChildHostComponent { Model = model, AllowModelChange = true };
+        var componentId = _testRenderer.AssignRootComponentId(rootComponent);
+        await _testRenderer.RenderRootComponentAsync(componentId);
+
+        var batchesBeforeReplace = _testRenderer.Batches.Count;
+
+        rootComponent.Model = new TestModel { StringProperty = "second" };
+        rootComponent.TriggerRender();
+
+        rootComponent.Model = new TestModel { StringProperty = "third" };
+        rootComponent.TriggerRender();
+
+        var disposedIds = _testRenderer.Batches
+            .Skip(batchesBeforeReplace)
+            .SelectMany(b => b.DisposedComponentIDs)
+            .ToList();
+
+        Assert.Empty(disposedIds);
+    }
+
     /// <summary>
     /// A host component that renders an <see cref="EditForm"/> with a child component inside,
     /// allowing tests to observe whether child components are disposed during model replacement.
@@ -598,11 +644,14 @@ public class EditFormTest
     {
         public TestModel Model { get; set; }
 
+        public bool AllowModelChange { get; set; }
+
         protected override void BuildRenderTree(RenderTreeBuilder builder)
         {
             builder.OpenComponent<EditForm>(0);
             builder.AddComponentParameter(1, "Model", Model);
-            builder.AddComponentParameter(2, "ChildContent", (RenderFragment<EditContext>)(_ => childBuilder =>
+            builder.AddComponentParameter(2, "AllowModelChange", AllowModelChange);
+            builder.AddComponentParameter(3, "ChildContent", (RenderFragment<EditContext>)(_ => childBuilder =>
             {
                 childBuilder.OpenComponent<LifecycleTrackingComponent>(0);
                 childBuilder.CloseComponent();
