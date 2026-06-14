@@ -539,6 +539,97 @@ public class EditFormTest
         }
     }
 
+    // Issue https://github.com/dotnet/aspnetcore/issues/41621
+    // Replacing the Model causes EditForm to use a new region key (EditContext.GetHashCode()),
+    // which makes the renderer treat the subtree as entirely new, disposing and recreating
+    // all child components rather than simply re-rendering them in place.
+
+    [Fact]
+    public async Task WhenModelIsReplaced_ChildComponentsAreDisposedAndRecreated()
+    {
+        var model = new TestModel { StringProperty = "initial" };
+        var rootComponent = new EditFormWithChildHostComponent { Model = model };
+        var componentId = _testRenderer.AssignRootComponentId(rootComponent);
+        await _testRenderer.RenderRootComponentAsync(componentId);
+
+        var batchesBeforeReplace = _testRenderer.Batches.Count;
+
+        rootComponent.Model = new TestModel { StringProperty = "replaced" };
+        rootComponent.TriggerRender();
+
+        // Collect all disposed component IDs from batches after the model replacement
+        var disposedIds = _testRenderer.Batches
+            .Skip(batchesBeforeReplace)
+            .SelectMany(b => b.DisposedComponentIDs)
+            .ToList();
+
+        // The bug: child components ARE disposed when the model changes because the
+        // region key (EditContext.GetHashCode()) changes, tearing down the entire subtree.
+        Assert.NotEmpty(disposedIds);
+    }
+
+    [Fact]
+    public async Task WhenSameModelIsReused_ChildComponentsAreNotDisposed()
+    {
+        var model = new TestModel { StringProperty = "stable" };
+        var rootComponent = new EditFormWithChildHostComponent { Model = model };
+        var componentId = _testRenderer.AssignRootComponentId(rootComponent);
+        await _testRenderer.RenderRootComponentAsync(componentId);
+
+        var batchesBeforeRerender = _testRenderer.Batches.Count;
+
+        // Re-render with the same model instance — no region key change expected
+        rootComponent.TriggerRender();
+
+        var disposedIds = _testRenderer.Batches
+            .Skip(batchesBeforeRerender)
+            .SelectMany(b => b.DisposedComponentIDs)
+            .ToList();
+
+        Assert.Empty(disposedIds);
+    }
+
+    /// <summary>
+    /// A host component that renders an <see cref="EditForm"/> with a child component inside,
+    /// allowing tests to observe whether child components are disposed during model replacement.
+    /// Corresponds to issue https://github.com/dotnet/aspnetcore/issues/41621.
+    /// </summary>
+    private class EditFormWithChildHostComponent : AutoRenderComponent
+    {
+        public TestModel Model { get; set; }
+
+        protected override void BuildRenderTree(RenderTreeBuilder builder)
+        {
+            builder.OpenComponent<EditForm>(0);
+            builder.AddComponentParameter(1, "Model", Model);
+            builder.AddComponentParameter(2, "ChildContent", (RenderFragment<EditContext>)(_ => childBuilder =>
+            {
+                childBuilder.OpenComponent<LifecycleTrackingComponent>(0);
+                childBuilder.CloseComponent();
+            }));
+            builder.CloseComponent();
+        }
+    }
+
+    /// <summary>
+    /// A minimal child component that implements <see cref="IDisposable"/> so the renderer
+    /// tracks its disposal in <see cref="CapturedBatch.DisposedComponentIDs"/>.
+    /// </summary>
+    private class LifecycleTrackingComponent : ComponentBase, IDisposable
+    {
+        public bool WasDisposed { get; private set; }
+
+        protected override void BuildRenderTree(RenderTreeBuilder builder)
+        {
+            builder.AddContent(0, "child content");
+        }
+
+        public void Dispose()
+        {
+            WasDisposed = true;
+        }
+    }
+
     private class TestFormValueModelBinder : IFormValueMapper
     {
         public bool CanMap(Type valueType, string mappingScopeName, string formName) => false;
