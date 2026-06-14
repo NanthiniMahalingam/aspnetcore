@@ -393,6 +393,92 @@ public class EditFormTest
                 .OfType<EditForm>()
                 .Single();
 
+    [Fact]
+    public async Task WhenModelIsReplaced_NewEditContextIsCreated()
+    {
+        var originalModel = new TestModel { StringProperty = "original" };
+        var rootComponent = new TestEditFormHostComponent { Model = originalModel };
+        var editFormComponent = await RenderAndGetTestEditFormComponentAsync(rootComponent);
+        var originalContext = editFormComponent.EditContext;
+
+        var replacementModel = new TestModel { StringProperty = "replacement" };
+        rootComponent.Model = replacementModel;
+        rootComponent.TriggerRender();
+
+        Assert.NotSame(originalContext, editFormComponent.EditContext);
+    }
+
+    [Fact]
+    public async Task WhenModelIsReplaced_NewEditContextReferencesTheReplacementModel()
+    {
+        var originalModel = new TestModel { StringProperty = "original" };
+        var rootComponent = new TestEditFormHostComponent { Model = originalModel };
+        await RenderAndGetTestEditFormComponentAsync(rootComponent);
+
+        var replacementModel = new TestModel { StringProperty = "replacement" };
+        rootComponent.Model = replacementModel;
+        rootComponent.TriggerRender();
+
+        Assert.Same(replacementModel, rootComponent.Model);
+        Assert.NotSame(originalModel, rootComponent.Model);
+    }
+
+    [Fact]
+    public async Task WhenSameModelInstanceIsReused_EditContextStillReferencesTheSameModel()
+    {
+        var model = new TestModel { StringProperty = "unchanged" };
+        var rootComponent = new TestEditFormHostComponent { Model = model };
+        var editFormComponent = await RenderAndGetTestEditFormComponentAsync(rootComponent);
+
+        rootComponent.TriggerRender();
+
+        Assert.Same(model, editFormComponent.EditContext!.Model);
+    }
+
+    [Fact]
+    public async Task WhenModelIsReplaced_FieldModifiedStateFromPreviousModelIsDiscarded()
+    {
+        var originalModel = new TestModel { StringProperty = "original" };
+        var rootComponent = new TestEditFormHostComponent { Model = originalModel };
+        var editFormComponent = await RenderAndGetTestEditFormComponentAsync(rootComponent);
+        var originalContext = editFormComponent.EditContext;
+        var field = originalContext.Field(nameof(TestModel.StringProperty));
+        originalContext.NotifyFieldChanged(field);
+        Assert.True(originalContext.IsModified());
+
+        var replacementModel = new TestModel { StringProperty = "replacement" };
+        rootComponent.Model = replacementModel;
+        rootComponent.TriggerRender();
+
+        Assert.NotSame(originalContext, editFormComponent.EditContext);
+        Assert.False(editFormComponent.EditContext!.IsModified());
+    }
+
+    [Fact]
+    public async Task WhenModelIsReplacedMultipleTimes_EachEditContextReferencesItsRespectiveModel()
+    {
+        var model1 = new TestModel { StringProperty = "first" };
+        var rootComponent = new TestEditFormHostComponent { Model = model1 };
+        var editFormComponent = await RenderAndGetTestEditFormComponentAsync(rootComponent);
+        var context1 = editFormComponent.EditContext;
+
+        var model2 = new TestModel { StringProperty = "second" };
+        rootComponent.Model = model2;
+        rootComponent.TriggerRender();
+        var context2 = editFormComponent.EditContext;
+
+        var model3 = new TestModel { StringProperty = "third" };
+        rootComponent.Model = model3;
+        rootComponent.TriggerRender();
+        var context3 = editFormComponent.EditContext;
+
+        Assert.NotSame(context1, context2);
+        Assert.NotSame(context2, context3);
+        Assert.Same(model1, context1!.Model);
+        Assert.Same(model2, context2!.Model);
+        Assert.Same(model3, context3!.Model);
+    }
+
     private async Task<EditForm> RenderAndGetTestEditFormComponentAsync(TestEditFormHostComponent hostComponent)
     {
         var componentId = _testRenderer.AssignRootComponentId(hostComponent);
