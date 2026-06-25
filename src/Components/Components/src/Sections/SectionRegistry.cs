@@ -24,6 +24,8 @@ internal sealed class SectionRegistry
         {
             providers.Add(provider);
         }
+
+        ValidateRenderModeCompatibility(identifier);
     }
 
     public void RemoveProvider(object identifier, SectionContent provider)
@@ -60,6 +62,7 @@ internal sealed class SectionRegistry
 
         // Notify the new subscriber with any existing content.
         var provider = GetCurrentProviderContentOrDefault(identifier);
+        ValidateRenderModeCompatibility(identifier, subscriber, provider);
         subscriber.ContentUpdated(provider);
 
         _subscribersByIdentifier.Add(identifier, subscriber);
@@ -105,4 +108,69 @@ internal sealed class SectionRegistry
             subscriber.ContentUpdated(provider);
         }
     }
+
+    private void ValidateRenderModeCompatibility(object identifier)
+    {
+        // Only the most recently added provider supplies content to the outlet, so that is the
+        // one whose render mode must be compatible with the subscribing outlet.
+        if (identifier is string && _subscribersByIdentifier.TryGetValue(identifier, out var subscriber))
+        {
+            ValidateRenderModeCompatibility(identifier, subscriber, GetCurrentProviderContentOrDefault(identifier));
+        }
+    }
+
+    // Sections work by sharing a RenderFragment between the SectionContent and the SectionOutlet. The content is
+    // rendered at the SectionOutlet's location, so it inherits the SectionOutlet's render mode rather than the one
+    // declared where the SectionContent lives. When those render modes differ, the content silently renders in the
+    // wrong mode (for example, statically when the developer expected it to be interactive), which is almost never
+    // what the developer intended. We detect that situation and throw an actionable error.
+    //
+    // This check is intentionally scoped to user-defined named sections (string SectionName). The built-in
+    // PageTitle/HeadContent/HeadOutlet components identify their sections with internal object SectionId sentinels
+    // and rely on flowing content from interactive components into a statically-rendered outlet, so they must not
+    // be subject to this validation.
+    private static void ValidateRenderModeCompatibility(object identifier, SectionOutlet? subscriber, SectionContent? provider)
+    {
+        if (identifier is not string sectionName || subscriber is null || provider is null)
+        {
+            return;
+        }
+
+        var outletRenderMode = subscriber.RenderMode;
+        var contentRenderMode = provider.RenderMode;
+
+        if (RenderModesAreCompatible(outletRenderMode, contentRenderMode))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"The content provided to the section '{sectionName}' uses the render mode '{DescribeRenderMode(contentRenderMode)}', " +
+            $"but the matching '{nameof(SectionOutlet)}' uses the render mode '{DescribeRenderMode(outletRenderMode)}'. " +
+            $"A '{nameof(SectionContent)}' and its matching '{nameof(SectionOutlet)}' must use the same render mode, because " +
+            $"the section content is rendered at the location of the '{nameof(SectionOutlet)}'. To fix this, ensure the " +
+            $"'{nameof(SectionContent)}' and the '{nameof(SectionOutlet)}' for the section '{sectionName}' use the same render mode.");
+    }
+
+    private static bool RenderModesAreCompatible(IComponentRenderMode? outletRenderMode, IComponentRenderMode? contentRenderMode)
+    {
+        if (outletRenderMode is null && contentRenderMode is null)
+        {
+            // Both are statically rendered.
+            return true;
+        }
+
+        if (outletRenderMode is null || contentRenderMode is null)
+        {
+            // One is interactive and the other is static.
+            return false;
+        }
+
+        // Both are interactive. Treating equal render mode types as compatible avoids false positives while still
+        // catching the unambiguous cases (such as InteractiveServer content under an InteractiveWebAssembly outlet).
+        return outletRenderMode.GetType() == contentRenderMode.GetType();
+    }
+
+    private static string DescribeRenderMode(IComponentRenderMode? renderMode)
+        => renderMode is null ? "static rendering" : renderMode.GetType().Name;
 }

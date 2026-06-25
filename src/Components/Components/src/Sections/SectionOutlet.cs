@@ -30,6 +30,13 @@ public sealed class SectionOutlet : IComponent, IDisposable
 
     internal IComponent? CurrentLogicalParent => _currentContentProvider;
 
+    /// <summary>
+    /// Gets the <see cref="IComponentRenderMode"/> assigned to this component, or <see langword="null"/>
+    /// if it is being rendered statically. Used to detect render-mode mismatches with the matching
+    /// <see cref="SectionContent"/>.
+    /// </summary>
+    internal IComponentRenderMode? RenderMode => _renderHandle.RenderMode;
+
     void IComponent.Attach(RenderHandle renderHandle)
     {
         _renderHandle = renderHandle;
