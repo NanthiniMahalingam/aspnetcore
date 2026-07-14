@@ -215,6 +215,72 @@ public class RevalidatingServerAuthenticationStateProviderTest
         Assert.Null(newAuthState.User.Identity.Name);
     }
 
+    [Fact]
+    public async Task RevalidateAsync_WhenAuthenticationStateIsValid_KeepsUserSignedIn()
+    {
+        // Arrange: Use a long interval so the periodic loop never fires during the test
+        using var provider = new TestRevalidatingServerAuthenticationStateProvider(TimeSpan.FromDays(1));
+        provider.SetAuthenticationState(CreateAuthenticationStateTask("test user"));
+        provider.NextValidationResult = Task.FromResult(true);
+        var didNotifyAuthenticationStateChanged = false;
+        provider.AuthenticationStateChanged += _ => { didNotifyAuthenticationStateChanged = true; };
+
+        // Act
+        await provider.RevalidateAsync();
+
+        // Assert
+        Assert.Single(provider.RevalidationCallLog);
+        Assert.False(didNotifyAuthenticationStateChanged);
+        Assert.Equal("test user", (await provider.GetAuthenticationStateAsync()).User.Identity.Name);
+    }
+
+    [Fact]
+    public async Task RevalidateAsync_WhenAuthenticationStateIsInvalid_ForcesSignOut()
+    {
+        // Arrange
+        using var provider = new TestRevalidatingServerAuthenticationStateProvider(TimeSpan.FromDays(1));
+        provider.SetAuthenticationState(CreateAuthenticationStateTask("test user"));
+        provider.NextValidationResult = Task.FromResult(false);
+
+        var newAuthStateNotificationTcs = new TaskCompletionSource<Task<AuthenticationState>>();
+        provider.AuthenticationStateChanged += newStateTask => newAuthStateNotificationTcs.SetResult(newStateTask);
+
+        // Act
+        await provider.RevalidateAsync();
+
+        // Assert
+        var newAuthState = await await newAuthStateNotificationTcs.Task;
+        Assert.False(newAuthState.User.Identity.IsAuthenticated);
+        Assert.Single(provider.RevalidationCallLog);
+    }
+
+    [Fact]
+    public async Task RevalidateAsync_WhenUnauthenticated_DoesNotValidate()
+    {
+        // Arrange
+        using var provider = new TestRevalidatingServerAuthenticationStateProvider(TimeSpan.FromDays(1));
+        provider.SetAuthenticationState(CreateAuthenticationStateTask(null));
+        provider.NextValidationResult = Task.FromResult(true);
+
+        // Act
+        await provider.RevalidateAsync();
+
+        // Assert
+        Assert.Empty(provider.RevalidationCallLog);
+    }
+
+    [Fact]
+    public async Task RevalidateAsync_AfterDisposal_ThrowsObjectDisposedException()
+    {
+        // Arrange
+        var provider = new TestRevalidatingServerAuthenticationStateProvider(TimeSpan.FromDays(1));
+        provider.SetAuthenticationState(CreateAuthenticationStateTask("test user"));
+        ((IDisposable)provider).Dispose();
+
+        // Act/Assert
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => provider.RevalidateAsync());
+    }
+
     static Task<AuthenticationState> CreateAuthenticationStateTask(string username)
     {
         var identity = !string.IsNullOrEmpty(username)

@@ -1,0 +1,66 @@
+﻿@page "/auth/on-demand-revalidation-authentication-state"
+@rendermode RenderMode.InteractiveServer
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using Components.TestServer.Services
+@implements IDisposable
+@inject RevalidatingAuthenticationStateProvider AuthProvider
+
+<h3>On-demand revalidation authentication state</h3>
+
+<p>
+    Interactive:
+    <strong id="is-interactive">@RendererInfo.IsInteractive</strong>
+</p>
+
+<p>
+    Authenticated:
+    <strong id="identity-authenticated">@(_user?.Identity?.IsAuthenticated == true)</strong>
+</p>
+
+<p>
+    Name:
+    <strong id="identity-name">@_user?.Identity?.Name</strong>
+</p>
+
+<p>
+    Credentials valid:
+    <strong id="credentials-valid">@AuthProvider.CredentialsAreValid</strong>
+</p>
+
+<button id="invalidate-credentials" @onclick="InvalidateCredentials">Invalidate credentials</button>
+<button id="revalidate-now" @onclick="RevalidateNowAsync">Revalidate now</button>
+
+@code {
+    private ClaimsPrincipal? _user;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
+        _user = (await AuthProvider.GetAuthenticationStateAsync()).User;
+    }
+
+    private void OnAuthenticationStateChanged(Task<AuthenticationState> task)
+    {
+        _ = UpdateUserAsync(task);
+    }
+
+    private async Task UpdateUserAsync(Task<AuthenticationState> task)
+    {
+        _user = (await task).User;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void InvalidateCredentials()
+    {
+        AuthProvider.CredentialsAreValid = false;
+    }
+
+    private Task RevalidateNowAsync()
+        => AuthProvider.RevalidateAsync();
+
+    public void Dispose()
+    {
+        AuthProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
+    }
+}

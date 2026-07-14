@@ -134,6 +134,10 @@ public class RazorComponentEndpointsStartup<TRootComponent>
         services.AddHttpContextAccessor();
         services.AddSingleton<AsyncOperationService>();
         services.AddCascadingAuthenticationState();
+
+        // Used by the on-demand revalidation E2E test. Registered as its own scoped service (rather
+        // than replacing the AuthenticationStateProvider) so it doesn't affect the other auth tests.
+        services.AddScoped<OnDemandRevalidatingAuthenticationStateProvider>();
         services.AddSingleton<WebSocketCompressionConfiguration>();
 
         var circuitContextAccessor = new TestCircuitContextAccessor();
