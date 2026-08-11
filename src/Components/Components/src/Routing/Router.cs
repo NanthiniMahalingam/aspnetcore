@@ -9,7 +9,6 @@ using System.Reflection.Metadata;
 using System.Runtime.ExceptionServices;
 using Microsoft.AspNetCore.Components.HotReload;
 using Microsoft.AspNetCore.Components.Rendering;
-using Microsoft.AspNetCore.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -78,7 +77,6 @@ public partial class Router : IComponent, IHandleAfterRender, IDisposable
     /// Gets or sets the page content to display when no match is found for the requested route.
     /// </summary>
     [Parameter]
-    [DynamicallyAccessedMembers(LinkerFlags.Component)]
     public Type? NotFoundPage { get; set; }
 
     /// <summary>
@@ -442,13 +440,13 @@ public partial class Router : IComponent, IHandleAfterRender, IDisposable
 
     private void RenderNotFound()
     {
+        var notFoundPageRouteData = NotFoundPage != null ? CreateNotFoundPageRouteData() : null;
         _renderHandle.Render(builder =>
         {
-            if (NotFoundPage != null)
+            if (notFoundPageRouteData != null)
             {
                 builder.OpenComponent<RouteView>(0);
-                builder.AddAttribute(1, nameof(RouteView.RouteData),
-                    new RouteData(NotFoundPage, _emptyParametersDictionary));
+                builder.AddAttribute(1, nameof(RouteView.RouteData), notFoundPageRouteData);
                 builder.CloseComponent();
             }
 #pragma warning disable CS0618 // Type or member is obsolete
@@ -463,6 +461,11 @@ public partial class Router : IComponent, IHandleAfterRender, IDisposable
             }
         });
     }
+
+    [UnconditionalSuppressMessage("Trimming", "IL2072",
+        Justification = "NotFoundPage is a routable [Route] component preserved by the router's route table.")]
+    private RouteData CreateNotFoundPageRouteData()
+        => new RouteData(NotFoundPage, _emptyParametersDictionary);
 
     async Task IHandleAfterRender.OnAfterRenderAsync()
     {

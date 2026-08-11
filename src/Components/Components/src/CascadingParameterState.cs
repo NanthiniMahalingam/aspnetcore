@@ -24,14 +24,13 @@ internal readonly struct CascadingParameterState
     public CascadingParameterState(in CascadingParameterInfo parameterInfo, ICascadingValueSupplier valueSupplier)
         : this(parameterInfo, valueSupplier, key: null) { }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2072",
+        Justification = "componentType is the runtime type of an existing component instance whose members are preserved by component instantiation.")]
     public static IReadOnlyList<CascadingParameterState> FindCascadingParameters(ComponentState componentState, out bool hasSingleDeliveryParameters)
     {
         var componentType = componentState.Component.GetType();
 
-        // Suppressed with "pragma warning disable" so ILLink Roslyn Anayzer doesn't report the warning.
-        #pragma warning disable IL2072 // 'componentType' argument does not satisfy 'DynamicallyAccessedMemberTypes.All' in call to 'Microsoft.AspNetCore.Components.CascadingParameterState.GetCascadingParameterInfos(Type)'.
         var infos = GetCascadingParameterInfos(componentType);
-        #pragma warning restore IL2072 // 'componentType' argument does not satisfy 'DynamicallyAccessedMemberTypes.All' in call to 'Microsoft.AspNetCore.Components.CascadingParameterState.GetCascadingParameterInfos(Type)'.
 
         hasSingleDeliveryParameters = false;
 
