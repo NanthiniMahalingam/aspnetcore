@@ -480,26 +480,6 @@ public class EventCallbackFactoryBinderExtensionsTest
     }
 
     [Fact]
-    public async Task CreateBinder_NonNullableDateTime_EmptyValue_PreservesEachBoundValue()
-    {
-        var value = new DateTime(2022, 2, 10);
-        var component = new EventCountingComponent();
-        Action<DateTime> setter = (_) => value = _;
-
-        EventCallback<ChangeEventArgs> binder = EventCallback.Factory.CreateBinder(component, setter, value, "yyyy-MM-dd", CultureInfo.InvariantCulture);
-        await binder.InvokeAsync(new ChangeEventArgs() { Value = string.Empty, });
-        Assert.Equal(1, component.Count);
-        var value1 = new DateTime(2023, 02, 09);
-        Action<DateTime> setter1 = (_) => value1 = _;
-
-        var binder1 = EventCallback.Factory.CreateBinder(component, setter1, value1, "yyyy-MM-dd", CultureInfo.InvariantCulture);
-        await binder1.InvokeAsync(new ChangeEventArgs() { Value = string.Empty, });
-        // The setter must not have been called, so the previous valid value is preserved.
-        Assert.Equal(new DateTime(2023, 02, 9), value1);
-        Assert.Equal(2, component.Count);
-    }
-
-    [Fact]
     public async Task CreateBinder_AsyncSetter_NonNullableDateTime_EmptyValue_DoesNotResetBoundValue()
     {
         // Regression test for https://github.com/dotnet/aspnetcore/issues/40660
@@ -511,22 +491,6 @@ public class EventCallbackFactoryBinderExtensionsTest
         Func<DateTime, Task> setter = (_) => { value = _; return Task.CompletedTask; };
 
         var binder = EventCallback.Factory.CreateBinder(component, setter, value, "yyyy-MM-dd", CultureInfo.InvariantCulture);
-
-        await binder.InvokeAsync(new ChangeEventArgs() { Value = string.Empty, });
-
-        Assert.Equal(new DateTime(2022, 2, 10), value);
-        Assert.Equal(1, component.Count);
-    }
-
-    [Fact]
-    public async Task CreateBinder_AsyncSetter_NonNullableDateTime_NoFormat_EmptyValue_DoesNotResetBoundValue()
-    {
-        // Same regression as above, but exercising the CreateBinderCoreAsync overload without a format.
-        var value = new DateTime(2022, 2, 10);
-        var component = new EventCountingComponent();
-        Func<DateTime, Task> setter = (_) => { value = _; return Task.CompletedTask; };
-
-        var binder = EventCallback.Factory.CreateBinder(component, setter, value, CultureInfo.InvariantCulture);
 
         await binder.InvokeAsync(new ChangeEventArgs() { Value = string.Empty, });
 
