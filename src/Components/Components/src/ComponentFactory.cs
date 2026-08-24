@@ -89,12 +89,11 @@ internal sealed class ComponentFactory
         return component;
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2072",
+        Justification = "The component type is the runtime type of an already-instantiated component, whose injectable members are preserved.")]
     private void PerformPropertyInjection(IServiceProvider serviceProvider, IComponent instance)
     {
-        // Suppressed with "pragma warning disable" so ILLink Roslyn Anayzer doesn't report the warning.
-#pragma warning disable IL2072 // 'componentType' argument does not satisfy 'DynamicallyAccessedMemberTypes.All' in call to 'IComponentPropertyActivator.GetActivator(Type)'.
         var propertyActivator = _propertyActivator.GetActivator(instance.GetType());
-#pragma warning restore IL2072
 
         propertyActivator(serviceProvider, instance);
     }

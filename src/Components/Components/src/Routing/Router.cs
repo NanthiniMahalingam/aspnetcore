@@ -9,7 +9,6 @@ using System.Reflection.Metadata;
 using System.Runtime.ExceptionServices;
 using Microsoft.AspNetCore.Components.HotReload;
 using Microsoft.AspNetCore.Components.Rendering;
-using Microsoft.AspNetCore.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -78,7 +77,6 @@ public partial class Router : IComponent, IHandleAfterRender, IDisposable
     /// Gets or sets the page content to display when no match is found for the requested route.
     /// </summary>
     [Parameter]
-    [DynamicallyAccessedMembers(LinkerFlags.Component)]
     public Type? NotFoundPage { get; set; }
 
     /// <summary>
@@ -440,6 +438,7 @@ public partial class Router : IComponent, IHandleAfterRender, IDisposable
         return null;
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2072", Justification = "NotFoundPage is a routable component that requires a RouteAttribute, so it is preserved as application code, which does not get trimmed.")]
     private void RenderNotFound()
     {
         _renderHandle.Render(builder =>
