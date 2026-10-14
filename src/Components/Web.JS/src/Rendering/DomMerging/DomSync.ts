@@ -4,8 +4,7 @@
 import { AutoComponentDescriptor, ComponentDescriptor, ServerComponentDescriptor, WebAssemblyComponentDescriptor, WebAssemblyServerOptions, canMergeDescriptors, discoverBrowserConfiguration, discoverComponents, discoverWebAssemblyOptions, mergeDescriptors } from '../../Services/ComponentDescriptorDiscovery';
 import { isInteractiveRootComponentElement } from '../BrowserRenderer';
 import { applyAnyDeferredValue } from '../DomSpecialPropertyUtil';
-import { LogicalElement, getLogicalChildrenArray, getLogicalNextSibling, getLogicalParent, getLogicalRootDescriptor, insertLogicalChild, insertLogicalChildBefore, isLogicalElement, toLogicalElement, toLogicalRootCommentElement } from '../LogicalElements';
-import { synchronizeAttributes } from './AttributeSync';
+import { LogicalElement, getLogicalChildrenArray, getLogicalNextSibling, getLogicalParent, getLogicalRootDescriptor, insertLogicalChild, insertLogicalChildBefore, isInPendingDisposalDocumentFragment, isLogicalElement, toLogicalElement, toLogicalRootCommentElement, trackPendingDisposalDocumentFragment } from '../LogicalElements';import { synchronizeAttributes } from './AttributeSync';
 import { cannotMergeDueToDataPermanentAttributes, isDataPermanentElement } from './DataPermanentElementSync';
 import { UpdateCost, ItemList, Operation, computeEditScript } from './EditScript';
 
@@ -231,12 +230,22 @@ function treatAsSubstitution(destination: Node, source: Node) {
 }
 
 function treatAsDeletion(nodeToDelete: Node, parentNode: Node) {
-  if (isLogicalElement(parentNode)) {
-    // It's not safe to call 'removeLogicalChild' here because it recursively removes
-    // logical descendants from their parents, and that can potentially interfere with
-    // renderer-managed DOM. Instead, we insert the logical element into a new document
-    // fragment, which allows the renderer to continue applying render batches until
-    // related components get disposed.
+  if (isInPendingDisposalDocumentFragment(nodeToDelete)) {
+    // The node was already moved to a tracked fragment while deleting an enclosing
+    // interactive root, so no further deletion is needed.
+    return;
+  }
+
+  const interactiveRootComponentElements = findUndisposedInteractiveRootComponentElements(nodeToDelete);
+  if (interactiveRootComponentElements.length > 0) {
+    // Preserve the subtree in a tracked fragment so pending disposal can still resolve
+    // captured element references.
+    const docFrag = toLogicalElement(document.createDocumentFragment());
+    insertLogicalChild(nodeToDelete, docFrag, 0);
+    trackPendingDisposalDocumentFragment(docFrag as unknown as DocumentFragment, interactiveRootComponentElements);
+  } else if (isLogicalElement(parentNode)) {
+    // Move the logical element to a fragment so recursive removal does not interfere
+    // with renderer-managed DOM.
     const docFrag = toLogicalElement(document.createDocumentFragment());
     insertLogicalChild(nodeToDelete, docFrag, 0);
   } else {
@@ -244,16 +253,27 @@ function treatAsDeletion(nodeToDelete: Node, parentNode: Node) {
   }
 }
 
-function treatAsInsertion(nodeToInsert: Node, nextNode: Node | null, parentNode: Node) {
-  if (isLogicalElement(parentNode)) {
-    insertLogicalChildBefore(nodeToInsert, parentNode as unknown as LogicalElement, nextNode as unknown as LogicalElement);
-  } else {
-    // If the parent node is not a logical element, that means
-    // the node we're inserting is either a root logical element, or not a logical
-    // element at all. In either case, it's safe to treat the node we're inserting
-    // as a single node because root logical nodes cannot be component comments.
-    parentNode.insertBefore(nodeToInsert, nextNode);
+// Interactive root markers are comments that may be nested anywhere in the deleted
+// subtree.
+function findUndisposedInteractiveRootComponentElements(node: Node): Node[] {
+  const result: Node[] = [];
+  if (node.nodeType === Node.COMMENT_NODE && isInteractiveRootComponentElement(node as unknown as LogicalElement)) {
+    result.push(node);
   }
+
+  if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) {
+    return result;
+  }
+
+  const treeWalker = document.createTreeWalker(node, NodeFilter.SHOW_COMMENT);
+  for (let comment = treeWalker.nextNode(); comment; comment = treeWalker.nextNode()) {
+    if (isInteractiveRootComponentElement(comment as unknown as LogicalElement)) {
+      result.push(comment);
+    }
+  }
+
+  return result;
+}
 
   // Find and register descriptors in new content
   const iterator = document.createNodeIterator(nodeToInsert, NodeFilter.SHOW_COMMENT);

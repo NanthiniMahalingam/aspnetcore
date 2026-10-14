@@ -1,0 +1,16 @@
+﻿@page "/nav/element-reference-disposal"
+
+<PageTitle>Element reference disposal</PageTitle>
+
+<h1>Element reference disposal</h1>
+
+<article id="element-reference-disposal-content">
+    <TestContentPackage.ElementReferenceDisposal
+        @rendermode="@(new InteractiveServerRenderMode(prerender: false))"
+        Id="server" />
+    <TestContentPackage.ElementReferenceDisposal
+        @rendermode="@(new InteractiveWebAssemblyRenderMode(prerender: false))"
+        Id="webassembly" />
+
+    <a id="element-reference-disposal-navigation" href="nav/other">Navigate away</a>
+</article>

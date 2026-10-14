@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 import * as DotNet from '../JSInterop/Microsoft.JSInterop';
+import { findElementInPendingDisposalDocumentFragments } from './LogicalElements';
 
 export function applyCaptureIdToElement(element: Element, referenceCaptureId: string): void {
   element.setAttribute(getCaptureIdAttributeName(referenceCaptureId), '');
@@ -9,8 +10,7 @@ export function applyCaptureIdToElement(element: Element, referenceCaptureId: st
 
 function getElementByCaptureId(referenceCaptureId: string) {
   const selector = `[${getCaptureIdAttributeName(referenceCaptureId)}]`;
-  return document.querySelector(selector);
-}
+  return document.querySelector(selector) ?? findElementInPendingDisposalDocumentFragments(selector);}
 
 function getCaptureIdAttributeName(referenceCaptureId: string) {
   return `_bl_${referenceCaptureId}`;

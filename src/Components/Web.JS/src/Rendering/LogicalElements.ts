@@ -34,6 +34,44 @@ const logicalChildrenPropname = Symbol();
 const logicalParentPropname = Symbol();
 const logicalRootDescriptorPropname = Symbol();
 
+// Tracks detached subtrees for element-reference lookup until all contained interactive
+// roots finish disposal.
+const pendingDisposalDocumentFragments = new Map<DocumentFragment, Set<Node>>();
+
+export function trackPendingDisposalDocumentFragment(fragment: DocumentFragment, interactiveRootComponentElements: Node[]): void {
+  pendingDisposalDocumentFragments.set(fragment, new Set(interactiveRootComponentElements));
+}
+
+export function untrackPendingDisposalDocumentFragmentForNode(node: Node): void {
+  const root = node.getRootNode();
+  if (root instanceof DocumentFragment) {
+    const interactiveRootComponentElements = pendingDisposalDocumentFragments.get(root);
+    if (interactiveRootComponentElements) {
+      interactiveRootComponentElements.delete(node);
+      if (interactiveRootComponentElements.size === 0) {
+        pendingDisposalDocumentFragments.delete(root);
+      }
+    }
+  }
+}
+
+export function findElementInPendingDisposalDocumentFragments(selector: string): Element | null {
+  for (const fragment of pendingDisposalDocumentFragments.keys()) {
+    const match = fragment.querySelector(selector);
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+// Distinguishes tracked disposal fragments from unrelated fragments such as template
+// content.
+export function isInPendingDisposalDocumentFragment(node: Node): boolean {
+  return pendingDisposalDocumentFragments.has(node.getRootNode() as DocumentFragment);
+}
+
 export function toLogicalRootCommentElement(descriptor: ComponentDescriptor): LogicalElement {
   // Now that we support start/end comments as component delimiters we are going to be setting up
   // adding the components rendered output as siblings of the start/end tags (between).

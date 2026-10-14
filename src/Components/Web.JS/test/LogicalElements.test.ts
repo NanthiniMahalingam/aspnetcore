@@ -11,6 +11,10 @@ import {
   getLogicalParent,
   permuteLogicalChildren,
   LogicalElement,
+  findElementInPendingDisposalDocumentFragments,
+  isInPendingDisposalDocumentFragment,
+  trackPendingDisposalDocumentFragment,
+  untrackPendingDisposalDocumentFragmentForNode,
 } from '../src/Rendering/LogicalElements';
 
 describe('insertLogicalChild', () => {
@@ -170,6 +174,28 @@ describe('insertLogicalChild', () => {
     expect(parent.childNodes[0]).toBe(newChild);
     expect(parent.childNodes[1]).toBe(spanA);
     expect(parent.childNodes[2]).toBe(spanB);
+  });
+});
+
+describe('pending disposal document fragments', () => {
+  test('should remain tracked until all interactive root components are disposed', () => {
+    const fragment = document.createDocumentFragment();
+    const firstRoot = document.createComment('first root');
+    const secondRoot = document.createComment('second root');
+    const capturedElement = document.createElement('div');
+    capturedElement.setAttribute('_bl_capture', '');
+    fragment.append(firstRoot, capturedElement, secondRoot);
+    trackPendingDisposalDocumentFragment(fragment, [firstRoot, secondRoot]);
+
+    untrackPendingDisposalDocumentFragmentForNode(firstRoot);
+
+    expect(isInPendingDisposalDocumentFragment(capturedElement)).toBe(true);
+    expect(findElementInPendingDisposalDocumentFragments('[_bl_capture]')).toBe(capturedElement);
+
+    untrackPendingDisposalDocumentFragmentForNode(secondRoot);
+
+    expect(isInPendingDisposalDocumentFragment(capturedElement)).toBe(false);
+    expect(findElementInPendingDisposalDocumentFragments('[_bl_capture]')).toBeNull();
   });
 });
 

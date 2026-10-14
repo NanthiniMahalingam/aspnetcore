@@ -12,7 +12,7 @@ import { RootComponentManager } from './RootComponentManager';
 import { getRendererer } from '../Rendering/Renderer';
 import { isPageLoading } from './NavigationEnhancement';
 import { markAsInteractiveRootComponentElement, setClearContentOnRootComponentRerender, setShouldPreserveContentOnInteractiveComponentDisposal } from '../Rendering/BrowserRenderer';
-import { LogicalElement } from '../Rendering/LogicalElements';
+import { LogicalElement, untrackPendingDisposalDocumentFragmentForNode } from '../Rendering/LogicalElements';
 import { JSEventRegistry } from './JSEventRegistry';
 
 type RootComponentOperationBatch = {
@@ -496,6 +496,9 @@ export class WebRootComponentManager implements DescriptorHandler, RootComponent
           // We can stop tracking this component now that .NET has acknowledged its removal.
           const component = this._rootComponentsBySsrComponentId.get(operation.ssrComponentId);
           if (component) {
+            // The component has now been disposed, so we no longer need to keep its detached
+            // subtree (if any) discoverable for ElementReference lookups.
+            untrackPendingDisposalDocumentFragmentForNode(component.descriptor.start as unknown as Node);
             this.unregisterComponent(component);
           }
           break;

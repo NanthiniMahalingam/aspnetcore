@@ -961,6 +961,29 @@ public class EnhancedNavigationTest : ServerTestBase<BasicTestAppServerSiteFixtu
         Assert.DoesNotContain(logs, log => log.Message.Contains("Error"));
     }
 
+    [Fact]
+    public void EnhancedNavigationPreservesElementReferencesUntilInteractiveRootsAreDisposed()
+    {
+        Navigate($"{ServerPathBase}/nav/element-reference-disposal");
+
+        Browser.Equal("True", () => Browser.Exists(By.Id("element-reference-disposal-initialized-server")).Text);
+        Browser.Equal("True", () => Browser.Exists(By.Id("element-reference-disposal-initialized-webassembly")).Text);
+
+        Browser.ExecuteJavaScript(
+            "sessionStorage.removeItem('element-reference-disposed-server');" +
+            "sessionStorage.removeItem('element-reference-disposed-webassembly');");
+        var originalDocument = Browser.Exists(By.TagName("html"));
+
+        Browser.Click(By.Id("element-reference-disposal-navigation"));
+
+        Browser.Equal("Other", () => Browser.Exists(By.TagName("h1")).Text);
+        Assert.Equal(originalDocument, Browser.FindElement(By.TagName("html")));
+        Browser.Equal("true", () => Browser.ExecuteJavaScript<string>(
+            "return sessionStorage.getItem('element-reference-disposed-server')"));
+        Browser.Equal("true", () => Browser.ExecuteJavaScript<string>(
+            "return sessionStorage.getItem('element-reference-disposed-webassembly')"));
+        Assert.DoesNotContain(Browser.GetBrowserLogs(LogLevel.Warning), entry => entry.Level == LogLevel.Severe);
+    }
     private void AssertScrollPositionCorrect(bool useEnhancedNavigation, long previousScrollPosition)
     {
         // from some reason, scroll position sometimes differs by 1 pixel between enhanced and browser's navigation
